@@ -1,0 +1,66 @@
+# ATOM S3 Hardware Configuration Package
+
+# ESP32-S3 Configuration
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+  variant: esp32s3
+
+# I2C for sensors (if needed)
+i2c:
+  sda: GPIO2
+  scl: GPIO1
+  scan: true
+
+# SPI for display
+spi:
+  clk_pin: GPIO17
+  mosi_pin: GPIO21
+
+# LCD Backlight
+output:
+  - platform: ledc
+    pin: GPIO16
+    id: backlight_pwm
+    frequency: 500Hz
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "${friendly_name} Backlight"
+    id: lcd_backlight
+    restore_mode: ALWAYS_ON
+    default_transition_length: 0s
+
+# Display - ST7789V 128x128
+display:
+  - platform: st7789v
+    model: Custom
+    height: 128
+    width: 128
+    offset_height: 0
+    offset_width: 0
+    cs_pin: GPIO15
+    dc_pin: GPIO33
+    reset_pin: GPIO34
+    rotation: 0
+    update_interval: 100ms
+    id: atom_display
+    # Lambda defined in qrc_display.yaml package
+
+# Button - GPIO41
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO41
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    name: "${friendly_name} Button"
+    id: main_button
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+    # Event handlers defined in qrc_network_manager.yaml

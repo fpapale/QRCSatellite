@@ -1,0 +1,56 @@
+# QRCSatellite - WiFi QR Display for ATOM S3
+
+substitutions:
+  device_name: qrcsatellite
+  friendly_name: "QRC Satellite"
+  # QRCService configuration
+  ha_url: !secret ha_url
+  qr_image_path: "/local/qrcodes/atom_s3_qr.png"
+
+esphome:
+  name: ${device_name}
+  comment: "QRCSatellite - WiFi QR Display Client"
+
+# Include hardware-specific package
+packages:
+  atom_s3: !include packages/atom_s3_hardware.yaml
+  network_manager: !include packages/qrc_network_manager.yaml  
+  display_qr: !include packages/qrc_display.yaml
+
+# Enable logging
+logger:
+  level: INFO
+
+# Home Assistant API
+api:
+  encryption:
+    key: !secret api_key
+  # Listen for QRCService events
+  on_event:
+    - event: qrcservice_qr_generated
+      then:
+        - lambda: |-
+            ESP_LOGI("qrc", "QR generated event received");
+            std::string url = event_data.get("url");
+            // Trigger QR image download
+            id(qr_download_trigger).publish_state(true);
+
+# OTA updates
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# WiFi configuration
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${friendly_name} Fallback"
+    password: !secret ap_password
+
+# Web server (optional - for debugging)
+web_server:
+  port: 80
+  auth:
+    username: !secret web_user
+    password: !secret web_pass

@@ -1,0 +1,52 @@
+# QRC Display Package
+# Handles display rendering and QR code display
+
+# Fonts
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 12
+  - file: "gfonts://Roboto"
+    id: font_medium
+    size: 16
+
+# Display Lambda
+display:
+  - id: atom_display
+    lambda: |-
+      if (id(current_state) == 0) {
+        // ===== MAIN MENU =====
+        it.printf(64, 10, id(font_medium), TextAlign::TOP_CENTER, "QRC Satellite");
+        
+        int count = id(saved_networks).size();
+        if (count > 0) {
+          // Show selected network
+          std::string network_name = id(saved_networks)[id(network_index)];
+          it.printf(64, 35, id(font_small), TextAlign::TOP_CENTER, "Network %d/%d:", id(network_index) + 1, count);
+          it.printf(64, 50, id(font_medium), TextAlign::TOP_CENTER, "%s", network_name.c_str());
+          
+          it.printf(64, 75, id(font_small), TextAlign::TOP_CENTER, "Press: Next");
+          it.printf(64, 92, id(font_small), TextAlign::TOP_CENTER, "Hold: Show QR");
+        } else {
+          it.printf(64, 50, id(font_small), TextAlign::TOP_CENTER, "No networks saved");
+          it.printf(64, 70, id(font_small), TextAlign::TOP_CENTER, "Add via HA");
+        }
+      } 
+      else if (id(current_state) == 1) {
+        // ===== QR DISPLAY =====
+        if (id(saved_networks).size() > id(network_index)) {
+          std::string ssid = id(saved_networks)[id(network_index)];
+          
+          // Header
+          it.printf(64, 5, id(font_small), TextAlign::TOP_CENTER, "WiFi QR Code");
+          it.printf(64, 20, id(font_medium), TextAlign::TOP_CENTER, "%s", ssid.c_str());
+          
+          // TODO: Display downloaded QR image here
+          // For now, show placeholder
+          it.rectangle(14, 40, 100, 100);  // QR placeholder box
+          it.printf(64, 85, id(font_small), TextAlign::CENTER, "QR Code");
+          
+          // Footer
+          it.printf(64, 115, id(font_small), TextAlign::TOP_CENTER, "Scan to connect");
+        }
+      }
