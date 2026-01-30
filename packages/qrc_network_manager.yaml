@@ -1,5 +1,6 @@
 # QRC Network Manager Package
 # Manages WiFi networks and integrates with QRCService
+# Note: API services are defined in main qrcsatellite.yaml
 
 # Global variables
 globals:
@@ -14,88 +15,6 @@ globals:
   - id: saved_passwords
     type: std::vector<std::string>
 
-# Home Assistant API Services
-api:
-  services:
-    # Add network
-    - service: add_network
-      variables:
-        ssid: string
-        password: string
-      then:
-        - lambda: |-
-            ESP_LOGI("qrc", "Adding network: %s", ssid.c_str());
-            id(saved_networks).push_back(ssid);
-            id(saved_passwords).push_back(password);
-    
-    # Clear all networks
-    - service: clear_networks
-      then:
-        - lambda: |-
-            ESP_LOGI("qrc", "Clearing all networks");
-            id(saved_networks).clear();
-            id(saved_passwords).clear();
-            id(network_index) = 0;
-    
-    # Request QR generation for current network
-    - service: request_qr
-      then:
-        - lambda: |-
-            if (id(saved_networks).size() > id(network_index)) {
-              std::string ssid = id(saved_networks)[id(network_index)];
-              std::string pwd = id(saved_passwords)[id(network_index)];
-              
-              ESP_LOGI("qrc", "Requesting QR for: %s", ssid.c_str());
-              
-              // Call Home Assistant service
-              auto call = id(ha_api).get_service("qrcservice", "generate_wifi_qr");
-              call.add_data("ssid", ssid);
-              call.add_data("password", pwd);
-              call.add_data("size", 128);
-              call.add_data("filename", "atom_s3_qr.png");
-              call.perform();
-            } else {
-              ESP_LOGW("qrc", "No network selected");
-            }
-
-# Button handlers
-binary_sensor:
-  - id: main_button
-    on_press:
-      then:
-        - lambda: |-
-            ESP_LOGI("button", "Button pressed! State=%d", id(current_state));
-            if (id(current_state) == 0) {
-              // Menu - cycle networks
-              if (id(saved_networks).size() > 0) {
-                id(network_index) = (id(network_index) + 1) % id(saved_networks).size();
-                ESP_LOGI("button", "Network %d selected", id(network_index));
-              }
-            } else {
-              // QR display - return to menu
-              id(current_state) = 0;
-            }
-    
-    on_click:
-      - min_length: 1000ms
-        max_length: 5000ms
-        then:
-          - lambda: |-
-              ESP_LOGI("button", "Long press - requesting QR");
-              if (id(saved_networks).size() > 0) {
-                // Request QR generation
-                auto call = id(ha_api).get_service("qrcservice", "generate_wifi_qr");
-                std::string ssid = id(saved_networks)[id(network_index)];
-                std::string pwd = id(saved_passwords)[id(network_index)];
-                call.add_data("ssid", ssid);
-                call.add_data("password", pwd);
-                call.add_data("size", 128);
-                call.add_data("filename", "atom_s3_qr.png");
-                call.perform();
-                
-                // Switch to QR display mode
-                id(current_state) = 1;
-              }
 
 # Sensors
 text_sensor:
@@ -116,9 +35,3 @@ sensor:
     update_interval: 5s
     lambda: |-
       return id(saved_networks).size();
-
-# Trigger for QR download
-binary_sensor:
-  - platform: template
-    id: qr_download_trigger
-    internal: true

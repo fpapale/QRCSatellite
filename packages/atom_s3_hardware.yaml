@@ -7,6 +7,8 @@ esp32:
     type: arduino
   variant: esp32s3
 
+# NO external library needed - using ESPHome native qr_code component!
+
 # I2C for sensors (if needed)
 i2c:
   sda: GPIO2
@@ -33,6 +35,12 @@ light:
     restore_mode: ALWAYS_ON
     default_transition_length: 0s
 
+
+# QR Code component (native ESPHome)
+qr_code:
+  - id: wifi_qr
+    value: "WIFI:T:WPA;S:MyNetwork;P:password;;"
+
 # Display - ST7789V 128x128
 display:
   - platform: st7789v
@@ -47,7 +55,43 @@ display:
     rotation: 0
     update_interval: 100ms
     id: atom_display
-    # Lambda defined in qrc_display.yaml package
+    lambda: |-
+      if (id(current_state) == 0) {
+        // ===== MAIN MENU =====
+        it.printf(64, 10, id(font_medium), TextAlign::TOP_CENTER, "QRC Satellite");
+        
+        int count = id(saved_networks).size();
+        if (count > 0) {
+          // Show selected network
+          std::string network_name = id(saved_networks)[id(network_index)];
+          it.printf(64, 35, id(font_small), TextAlign::TOP_CENTER, "Network %d/%d:", id(network_index) + 1, count);
+          it.printf(64, 50, id(font_medium), TextAlign::TOP_CENTER, "%s", network_name.c_str());
+          
+          it.printf(64, 75, id(font_small), TextAlign::TOP_CENTER, "Press: Next");
+          it.printf(64, 92, id(font_small), TextAlign::TOP_CENTER, "Hold: Show QR");
+        } else {
+          it.printf(64, 50, id(font_small), TextAlign::TOP_CENTER, "No networks saved");
+          it.printf(64, 70, id(font_small), TextAlign::TOP_CENTER, "Add via HA");
+        }
+      } 
+      else if (id(current_state) == 1) {
+        // ===== QR DISPLAY =====
+        if (id(saved_networks).size() > id(network_index)) {
+          std::string ssid = id(saved_networks)[id(network_index)];
+          
+          // Clear screen with white background for QR code
+          it.filled_rectangle(0, 0, 128, 128, Color::WHITE);
+          
+          // Draw QR code centered (QR is ~25 modules * 4 scale = 100px)
+          // Center: (128-100)/2 = 14 for x, and y=6 to leave room for footer
+          it.qr_code(14, 6, id(wifi_qr), Color::BLACK, 4);
+          
+          // Footer with SSID name (at bottom)
+          it.printf(64, 115, id(font_small), Color::BLACK, TextAlign::TOP_CENTER, "%s", ssid.c_str());
+        }
+      }
+
+
 
 # Button - GPIO41
 binary_sensor:
@@ -63,4 +107,41 @@ binary_sensor:
     filters:
       - delayed_on: 50ms
       - delayed_off: 50ms
-    # Event handlers defined in qrc_network_manager.yaml
+    
+    # Short press - cycle networks
+    on_press:
+      then:
+        - lambda: |-
+            ESP_LOGI("button", "Button pressed! State=%d", id(current_state));
+            if (id(current_state) == 0) {
+              // Menu - cycle networks
+              if (id(saved_networks).size() > 0) {
+                id(network_index) = (id(network_index) + 1) % id(saved_networks).size();
+                ESP_LOGI("button", "Network %d selected", id(network_index));
+              }
+            } else {
+              // QR display - return to menu
+              id(current_state) = 0;
+            }
+    
+    # Long press - show QR and update QR code value
+    on_click:
+      - min_length: 1000ms
+        max_length: 5000ms
+        then:
+          - lambda: |-
+              ESP_LOGI("button", "Long press - showing QR");
+              if (id(saved_networks).size() > 0) {
+                // Build WiFi QR string
+                std::string ssid = id(saved_networks)[id(network_index)];
+                std::string pwd = id(saved_passwords)[id(network_index)];
+                std::string wifi_string = "WIFI:T:WPA;S:" + ssid + ";P:" + pwd + ";;";
+                
+                // Update QR code value
+                id(wifi_qr).set_value(wifi_string);
+                
+                // Switch to QR display mode
+                id(current_state) = 1;
+              }
+
+
